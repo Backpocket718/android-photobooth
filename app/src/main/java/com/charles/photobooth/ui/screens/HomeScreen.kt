@@ -26,9 +26,11 @@ import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.ElevatedButton
 import androidx.compose.material3.FilledTonalButton
 import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -39,12 +41,17 @@ import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import com.charles.photobooth.settings.SettingsRepository
+import kotlinx.coroutines.flow.first
 import com.charles.photobooth.BuildConfig
 import com.charles.photobooth.R
 import com.charles.photobooth.monetization.BillingUiState
@@ -70,6 +77,16 @@ fun HomeScreen(
     onBuyUnlimited: () -> Unit = {},
 ) {
     var showPaywall by remember { mutableStateOf(false) }
+    // CODY: Canva walk-up background, loaded from Settings. Blank = default theme.
+    // When set, Home becomes attract mode: full-bleed image, one big Start
+    // button bottom-center, small settings gear top-right. Gallery / Tutorial
+    // are hidden from guests; no background is ever shown behind captures.
+    val context = LocalContext.current
+    var attractBackgroundPath by remember { mutableStateOf<String?>(null) }
+    LaunchedEffect(Unit) {
+        attractBackgroundPath = SettingsRepository(context).settingsFlow.first()
+            .event.attractBackgroundPath.ifBlank { null }
+    }
     val infiniteTransition = rememberInfiniteTransition(label = "bg")
     val animOffset by infiniteTransition.animateFloat(
         initialValue = 0f,
@@ -86,6 +103,30 @@ fun HomeScreen(
             .fillMaxSize()
             .background(DarkBackground),
     ) {
+        // Attract background, drawn first so everything else sits on top of it.
+        attractBackgroundPath?.let { path ->
+            AsyncImage(
+                model = java.io.File(path),
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.fillMaxSize(),
+            )
+            // Gentle bottom scrim so the Start button stays readable on any design.
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colorStops = arrayOf(
+                                0.55f to Color.Transparent,
+                                1f to Color.Black.copy(alpha = 0.35f),
+                            ),
+                        ),
+                    ),
+            )
+        }
+        // Default-theme glows only; hidden in attract mode so they don't tint the Canva design.
+        if (attractBackgroundPath == null) {
         Box(
             modifier = Modifier
                 .size(400.dp)
@@ -116,7 +157,9 @@ fun HomeScreen(
                     ),
                 ),
         )
+        }
 
+        if (attractBackgroundPath == null) {
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -315,6 +358,55 @@ fun HomeScreen(
                         }
                     }
                 }
+            }
+        }
+        } else {
+            // Attract mode: one big Start button, bottom-center, plus a small
+            // settings gear top-right for the admin. Gallery / Tutorial /
+            // paywall are hidden from guests. Layout is fixed so Canva designs
+            // can leave the bottom-center clear: button is centered, 72dp tall,
+            // 48dp above the bottom edge, max ~55% of screen width.
+            IconButton(
+                onClick = onOpenSettings,
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(16.dp)
+                    .size(48.dp)
+                    .clip(CircleShape)
+                    .background(Color.Black.copy(alpha = 0.35f)),
+            ) {
+                Icon(
+                    painter = painterResource(id = android.R.drawable.ic_menu_preferences),
+                    contentDescription = "Settings",
+                    tint = Color.White.copy(alpha = 0.85f),
+                    modifier = Modifier.size(22.dp),
+                )
+            }
+            ElevatedButton(
+                onClick = onStartCapture,
+                modifier = Modifier
+                    .align(Alignment.BottomCenter)
+                    .navigationBarsPadding()
+                    .padding(bottom = 48.dp)
+                    .fillMaxWidth(0.55f)
+                    .height(72.dp),
+                shape = RoundedCornerShape(24.dp),
+                colors = ButtonDefaults.elevatedButtonColors(
+                    containerColor = Rose,
+                    contentColor = Color.White,
+                ),
+                elevation = ButtonDefaults.elevatedButtonElevation(defaultElevation = 8.dp),
+            ) {
+                Icon(
+                    painter = painterResource(id = android.R.drawable.ic_menu_camera),
+                    contentDescription = null,
+                    modifier = Modifier.size(28.dp),
+                )
+                Spacer(modifier = Modifier.width(12.dp))
+                Text(
+                    text = stringResource(R.string.start_photobooth),
+                    style = MaterialTheme.typography.titleLarge.copy(fontWeight = FontWeight.Bold),
+                )
             }
         }
 

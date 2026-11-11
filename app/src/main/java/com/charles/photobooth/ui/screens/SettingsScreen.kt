@@ -212,7 +212,13 @@ fun SettingsScreen(
                 .padding(16.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp),
         ) {
-            EventSettingsSection(state, onEventChange = vm::updateEvent, textFieldColors = textFieldColors)
+            EventSettingsSection(
+                state,
+                onEventChange = vm::updateEvent,
+                onAttractBackgroundPick = vm::setAttractBackground,
+                onAttractBackgroundClear = vm::clearAttractBackground,
+                textFieldColors = textFieldColors,
+            )
             CameraSettingsSection(
                 state,
                 onCameraChange = vm::updateCamera,
@@ -332,8 +338,16 @@ private fun SettingsCard(
 private fun EventSettingsSection(
     state: AllSettings,
     onEventChange: (String, String, String) -> Unit,
+    onAttractBackgroundPick: (android.net.Uri) -> Unit,
+    onAttractBackgroundClear: () -> Unit,
     textFieldColors: androidx.compose.material3.TextFieldColors,
 ) {
+    // CODY: Canva attract background picker. Copies the image into app files
+    // (see SettingsViewModel.setAttractBackground) so it survives reboots.
+    val attractPicker = rememberLauncherForActivityResult(
+        contract = ActivityResultContracts.PickVisualMedia(),
+        onResult = { uri -> uri?.let(onAttractBackgroundPick) },
+    )
     SettingsCard(
         title = stringResource(R.string.settings_event),
         iconRes = android.R.drawable.ic_menu_today,
@@ -359,6 +373,35 @@ private fun EventSettingsSection(
             modifier = Modifier.fillMaxWidth(),
             colors = textFieldColors,
         )
+        Text(
+            text = "Walk-up background (Canva) — shown full-screen on the home screen only, never behind captures. Design at 1920 x 1200 px landscape for the Tab A9+. Keep the bottom-center clear: that is where the big Start button sits. A small settings gear stays in the top-right corner.",
+            style = MaterialTheme.typography.bodySmall,
+            color = TextSecondary,
+        )
+        if (state.event.attractBackgroundPath.isNotBlank()) {
+            AsyncImage(
+                model = java.io.File(state.event.attractBackgroundPath),
+                contentDescription = "Event background preview",
+                contentScale = ContentScale.Crop,
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .aspectRatio(16f / 10f)
+                    .clip(RoundedCornerShape(12.dp)),
+            )
+        }
+        Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            ElevatedButton(
+                onClick = { attractPicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                shape = RoundedCornerShape(12.dp),
+                colors = ButtonDefaults.elevatedButtonColors(
+                    containerColor = CardSurfaceLight,
+                    contentColor = Color.White,
+                ),
+            ) { Text(if (state.event.attractBackgroundPath.isBlank()) "Choose event background" else "Change background") }
+            if (state.event.attractBackgroundPath.isNotBlank()) {
+                TextButton(onClick = onAttractBackgroundClear) { Text("Remove", color = Rose) }
+            }
+        }
     }
 }
 
@@ -774,6 +817,15 @@ private fun CameraSettingsSection(
     onCameraIdChange: (String?) -> Unit,
     onFrontScreenFlashChange: (Boolean) -> Unit,
 ) {
+    // CODY: camera picker. Upstream stored cameraId and passed onCameraIdChange
+    // here, but never showed a picker — only the front/back toggle existed.
+    // List is read when Settings opens; plug a USB camera in first, then
+    // reopen Settings to see it. If a webcam doesn't appear, the tablet
+    // doesn't expose it via Camera2 and CameraX can't use it.
+    val context = LocalContext.current
+    val availableCameras = remember {
+        runCatching { com.charles.photobooth.camera.CameraCaptureManager(context).getAvailableCameras() }.getOrDefault(emptyList())
+    }
     SettingsCard(
         title = stringResource(R.string.settings_camera),
         iconRes = android.R.drawable.ic_menu_camera,
@@ -788,6 +840,48 @@ private fun CameraSettingsSection(
             checked = state.camera.frontScreenFlashEnabled,
             onCheckedChange = onFrontScreenFlashChange,
         )
+        Text(
+            text = "Capture camera",
+            style = MaterialTheme.typography.labelLarge,
+            color = TextSecondary,
+        )
+        Text(
+            text = "Auto uses the front/back switch above. Pick a specific camera for the rear camera or a plugged-in USB / HDMI-capture camera. Rear is the better sensor on the Tab A9+ (8 MP vs 5 MP front).",
+            style = MaterialTheme.typography.bodySmall,
+            color = TextSecondary,
+        )
+        Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            val options = listOf(null to "Auto (front/back switch)") +
+                availableCameras.map { it.id to it.displayName }
+            options.forEach { (id, label) ->
+                val selected = state.camera.cameraId == id
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clip(RoundedCornerShape(8.dp))
+                        .background(
+                            if (selected) Rose.copy(alpha = 0.2f)
+                            else Color.Transparent,
+                        )
+                        .clickable { onCameraIdChange(id) }
+                        .padding(horizontal = 12.dp, vertical = 8.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                ) {
+                    Text(
+                        text = label,
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = if (selected) Color.White else TextSecondary,
+                    )
+                }
+            }
+            if (availableCameras.isEmpty()) {
+                Text(
+                    text = "No cameras detected — check camera permission.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Rose,
+                )
+            }
+        }
     }
 }
 

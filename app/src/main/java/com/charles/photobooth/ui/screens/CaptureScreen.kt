@@ -169,6 +169,12 @@ fun CaptureScreen(
     var boothPhotosTaken by rememberSaveable { mutableIntStateOf(0) }
     val boothPhotoIds = remember { mutableStateListOf<Long>() }
     var pendingNextBoothShot by remember { mutableStateOf(false) }
+    // CODY: retake flow. After the last booth shot we do NOT compose/finish
+    // immediately — we pause for boothIntervalSeconds so guests can retake
+    // that shot (same pause already happens between shots). pendingBoothFinish
+    // is that pause; lastBoothPhotoId is the shot a retake would replace.
+    var pendingBoothFinish by remember { mutableStateOf(false) }
+    var lastBoothPhotoId by remember { mutableStateOf(0L) }
     var showFlash by remember { mutableStateOf(false) }
     var selectedFilter by rememberSaveable { mutableStateOf(PhotoFilter.NONE) }
     var cameraId by rememberSaveable { mutableStateOf<String?>(null) }
@@ -192,6 +198,54 @@ fun CaptureScreen(
             captureViewModel.enterPreviewAndUpload(photoId, uploadSettings)
         } else {
             onFinishedCapture(photoId)
+        }
+    }
+
+    // CODY: finish a completed booth set — GIF first, then template compose,
+    // then plain finish. Extracted from the save onComplete so the same logic
+    // runs after the last-shot retake pause (pendingBoothFinish) instead of
+    // immediately when the last shutter fires.
+    fun finishBoothPhotos(lastId: Long) {
+        if (gifModeEnabled && boothPhotoIds.size >= 2) {
+            captureViewModel.createGifFromPhotos(
+                photoIds = boothPhotoIds.toList(),
+                eventName = eventName,
+            ) { gifId ->
+                quotaReservedForSession = 0
+                finishOrPreview(gifId ?: lastId)
+            }
+        } else if (multiPhotoTemplate != null) {
+            captureViewModel.composeTemplate(
+                photoIds = boothPhotoIds.toList(),
+                template = multiPhotoTemplate,
+                eventName = eventName,
+                selectedFrameId = selectedFrameId,
+            ) { compositeId ->
+                quotaReservedForSession = 0
+                if (compositeId == null) {
+                    Toast.makeText(context, captureTemplateFailedRes, Toast.LENGTH_LONG).show()
+                }
+                finishOrPreview(compositeId ?: lastId)
+            }
+        } else {
+            quotaReservedForSession = 0
+            finishOrPreview(lastId)
+        }
+    }
+
+    // CODY: retake the most recent booth shot. Cancels whichever pause is
+    // running (between shots, or after the last shot), deletes that photo,
+    // and restarts the 3s countdown for the same slot.
+    val retakeLastBoothPhoto: () -> Unit = {
+        if (boothPhotosTaken > 0 && boothPhotoIds.isNotEmpty()) {
+            val lastId = boothPhotoIds.removeAt(boothPhotoIds.lastIndex)
+            captureViewModel.deletePhoto(lastId)
+            boothPhotosTaken--
+            pendingNextBoothShot = false
+            pendingBoothFinish = false
+            captureViewModel.resetToIdle()
+            captureViewModel.startCountdown()
+            countdown = 3
         }
     }
 
@@ -300,6 +354,7 @@ fun CaptureScreen(
                         boothPhotosTaken = 0
                         boothPhotoIds.clear()
                         pendingNextBoothShot = false
+                        pendingBoothFinish = false
                         captureViewModel.startCountdown()
                         countdown = 3
                     } else {
@@ -334,6 +389,16 @@ fun CaptureScreen(
             pendingNextBoothShot = false
             captureViewModel.startCountdown()
             countdown = 3
+        }
+    }
+
+    // CODY: after the last shot, wait one gap before finishing so guests can
+    // retake it. If they tap Retake, this effect is cancelled by the flag flip.
+    LaunchedEffect(pendingBoothFinish) {
+        if (pendingBoothFinish) {
+            delay(boothIntervalSeconds * 1000L)
+            pendingBoothFinish = false
+            finishBoothPhotos(lastBoothPhotoId)
         }
     }
 
@@ -479,50 +544,14 @@ fun CaptureScreen(
                                 if (boothPhotosTaken < effectiveBoothCount) {
                                     captureViewModel.resetToIdle()
                                     pendingNextBoothShot = true
-                                } else if (gifModeEnabled && boothPhotoIds.size >= 2) {
-                                    // GIF mode takes priority over template composing: if the
-                                    // user explicitly opted into an animated GIF, that's what
-                                    // they want — even when a multi-frame template is selected.
-                                    android.util.Log.i(
-                                        "BoothFlow",
-                                        "Booth complete → creating GIF from ${boothPhotoIds.size} photos (gifModeEnabled=true, template=${multiPhotoTemplate != null})",
-                                    )
-                                    captureViewModel.createGifFromPhotos(
-                                        photoIds = boothPhotoIds.toList(),
-                                        eventName = eventName,
-                                    ) { gifId ->
-                                        quotaReservedForSession = 0
-                                        android.util.Log.i("BoothFlow", "GIF creation completed → gifId=$gifId")
-                                        finishOrPreview(gifId ?: id)
-                                    }
-                                } else if (multiPhotoTemplate != null) {
-                                    android.util.Log.i(
-                                        "BoothFlow",
-                                        "Booth complete → composing template (gifModeEnabled=$gifModeEnabled, photos=${boothPhotoIds.size})",
-                                    )
-                                    captureViewModel.composeTemplate(
-                                        photoIds = boothPhotoIds.toList(),
-                                        template = multiPhotoTemplate,
-                                        eventName = eventName,
-                                        selectedFrameId = selectedFrameId,
-                                    ) { compositeId ->
-                                        quotaReservedForSession = 0
-                                        if (compositeId == null) {
-                                            Toast.makeText(
-                                                context,
-                                                captureTemplateFailedRes,
-                                                Toast.LENGTH_LONG,
-                                            ).show()
-                                        }
-                                        finishOrPreview(compositeId ?: id)
-                                    }
                                 } else {
-                                    android.util.Log.i(
-                                        "BoothFlow",
-                                        "Booth complete → no GIF/template (gifModeEnabled=$gifModeEnabled, photos=${boothPhotoIds.size}, template=null)",
-                                    )
-                                    quotaReservedForSession = 0
-                                    finishOrPreview(id)
+                                    // CODY: booth set complete — pause before finishing
+                                    // (see pendingBoothFinish) so the last shot can
+                                    // still be retaken. finishBoothPhotos() runs
+                                    // after that pause.
+                                    lastBoothPhotoId = id
+                                    captureViewModel.resetToIdle()
+                                    pendingBoothFinish = true
                                 }
                         } else {
                             quotaReservedForSession = 0
@@ -805,6 +834,36 @@ fun CaptureScreen(
                 .padding(bottom = 24.dp),
             horizontalAlignment = Alignment.CenterHorizontally,
         ) {
+            // CODY: retake window — shown during the gap between shots and
+            // after the last shot, while a retake is still possible. Tapping
+            // it deletes the last shot and restarts its countdown.
+            if ((pendingNextBoothShot || pendingBoothFinish) && boothPhotosTaken > 0 && !isCountingDown) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(12.dp),
+                    modifier = Modifier
+                        .padding(bottom = 12.dp)
+                        .clip(RoundedCornerShape(20.dp))
+                        .background(DarkBackground.copy(alpha = 0.85f))
+                        .padding(horizontal = 16.dp, vertical = 10.dp),
+                ) {
+                    Text(
+                        text = "Shot $boothPhotosTaken of $effectiveBoothCount taken",
+                        style = MaterialTheme.typography.bodyMedium,
+                        color = Color.White,
+                    )
+                    FilledTonalButton(
+                        onClick = retakeLastBoothPhoto,
+                        shape = RoundedCornerShape(12.dp),
+                        colors = ButtonDefaults.filledTonalButtonColors(
+                            containerColor = Rose,
+                            contentColor = Color.White,
+                        ),
+                    ) {
+                        Text("Retake last photo", fontWeight = FontWeight.Bold)
+                    }
+                }
+            }
             if (uiState is CaptureUiState.Idle) {
                 if (videoCaptureEnabled) {
                     Row(

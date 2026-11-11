@@ -251,6 +251,16 @@ class CaptureViewModel(
         }
     }
 
+    // CODY: delete one booth shot (file + DB row) so a retaken shot doesn't
+    // linger in the gallery. Used by the "Retake last photo" flow.
+    fun deletePhoto(photoId: Long) {
+        viewModelScope.launch {
+            val photo = photoDao.getPhotosByIds(listOf(photoId)).firstOrNull() ?: return@launch
+            runCatching { File(photo.localPath).delete() }
+            photoDao.deleteById(photoId)
+        }
+    }
+
     fun saveCapturedVideo(
         videoFile: File,
         eventName: String,

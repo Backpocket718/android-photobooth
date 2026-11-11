@@ -20,6 +20,7 @@ import com.charles.photobooth.R
 import com.charles.photobooth.network.SmtpEmailClient
 import com.charles.photobooth.network.SmsGatewayClient
 import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.withContext
 import android.net.Uri
 import com.charles.photobooth.network.GitHubComment
 import com.charles.photobooth.network.GitHubIssue
@@ -104,6 +105,32 @@ class SettingsViewModel(
             repo.updateEventSettings {
                 it.copy(eventName = eventName, eventDate = eventDate, filenamePattern = pattern)
             }
+        }
+    }
+
+    // CODY: Canva attract background. Copies the picked image into the app's
+    // private files dir (so it survives reboots / picker permission expiry)
+    // and stores that file path. Design at 1920x1200 landscape for the Tab A9+.
+    fun setAttractBackground(imageUri: Uri) {
+        viewModelScope.launch {
+            val dest = withContext(kotlinx.coroutines.Dispatchers.IO) {
+                runCatching {
+                    val destFile = java.io.File(getApplication<Application>().filesDir, "attract-background.jpg")
+                    getApplication<Application>().contentResolver.openInputStream(imageUri)?.use { input ->
+                        destFile.outputStream().use { output -> input.copyTo(output) }
+                    } ?: return@runCatching null
+                    destFile.absolutePath
+                }.getOrNull()
+            } ?: return@launch
+            repo.updateEventSettings { it.copy(attractBackgroundPath = dest) }
+            _testStatus.value = "Event background set"
+        }
+    }
+
+    fun clearAttractBackground() {
+        viewModelScope.launch {
+            runCatching { java.io.File(getApplication<Application>().filesDir, "attract-background.jpg").delete() }
+            repo.updateEventSettings { it.copy(attractBackgroundPath = "") }
         }
     }
 

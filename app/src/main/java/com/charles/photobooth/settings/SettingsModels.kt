@@ -8,6 +8,12 @@ data class EventSettings(
     val filenamePattern: String = "EVENT_yyyyMMdd_HHmmss",
     val currentTemplateId: Long? = null,
     val selectedFrameId: Long? = null,
+    // CODY: Canva-designed walk-up / attract background, full-bleed on the
+    // Home screen only (never behind captures). File path copied into the
+    // app's private files dir when picked in Settings. Blank = default theme.
+    // Design at 1920x1200 px landscape (Tab A9+, 16:10). Keep the
+    // bottom-center clear: that is where the big Start button sits.
+    val attractBackgroundPath: String = "",
 )
 
 data class CameraSettings(

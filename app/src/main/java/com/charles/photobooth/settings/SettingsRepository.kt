@@ -39,6 +39,7 @@ class SettingsRepository(private val context: Context) {
         val EVENT_NAME = stringPreferencesKey("event_name")
         val EVENT_DATE = stringPreferencesKey("event_date")
         val FILENAME_PATTERN = stringPreferencesKey("filename_pattern")
+        val EVENT_ATTRACT_BACKGROUND = stringPreferencesKey("event_attract_background")
         val CURRENT_TEMPLATE_ID = stringPreferencesKey("current_template_id")
 
         val UPLOAD_USE_ANON = stringPreferencesKey("upload_use_anon")
@@ -131,6 +132,7 @@ class SettingsRepository(private val context: Context) {
             prefs[Keys.EVENT_NAME] = updated.eventName
             prefs[Keys.EVENT_DATE] = updated.eventDate
             prefs[Keys.FILENAME_PATTERN] = updated.filenamePattern
+            prefs[Keys.EVENT_ATTRACT_BACKGROUND] = updated.attractBackgroundPath
             prefs[Keys.CURRENT_TEMPLATE_ID] = updated.currentTemplateId?.toString() ?: ""
             prefs[Keys.SELECTED_FRAME_ID] = updated.selectedFrameId?.toString() ?: ""
         }
@@ -249,6 +251,7 @@ class SettingsRepository(private val context: Context) {
             eventName = this[Keys.EVENT_NAME] ?: EventSettings().eventName,
             eventDate = this[Keys.EVENT_DATE] ?: EventSettings().eventDate,
             filenamePattern = this[Keys.FILENAME_PATTERN] ?: EventSettings().filenamePattern,
+            attractBackgroundPath = this[Keys.EVENT_ATTRACT_BACKGROUND] ?: "",
             currentTemplateId = (this[Keys.CURRENT_TEMPLATE_ID] ?: "").toLongOrNull(),
             selectedFrameId = (this[Keys.SELECTED_FRAME_ID] ?: "").toLongOrNull(),
         )
