@@ -27,18 +27,12 @@ class PhotoQuotaRepository(
 
     val state: Flow<PhotoQuotaState> = context.photoQuotaDataStore.data.map { prefs ->
         val today = todayKey()
-        val storedDate = prefs[dateKey]
-        if (BuildConfig.WEDDING_MODE) {
-            return@map PhotoQuotaState(
-                dateKey = today,
-                hasUnlimitedPhotos = true,
-            )
-        }
-        PhotoQuotaState(
+        // CODY PRIVATE FORK: no quota, no ads, no paywall. This build lives only
+        // on Cody's tablet for family/group parties. Unlimited, always.
+        // (Upstream returns hasUnlimitedPhotos only in WEDDING_MODE or after purchase.)
+        return@map PhotoQuotaState(
             dateKey = today,
-            photosUsedToday = if (storedDate == today) prefs[photosUsedKey] ?: 0 else 0,
-            adPhotosEarnedToday = if (storedDate == today) prefs[adPhotosEarnedKey] ?: 0 else 0,
-            hasUnlimitedPhotos = prefs[unlimitedKey] == true,
+            hasUnlimitedPhotos = true,
         )
     }
 

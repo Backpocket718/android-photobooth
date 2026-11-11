@@ -5,7 +5,6 @@ import android.content.Context
 import androidx.datastore.preferences.core.booleanPreferencesKey
 import androidx.datastore.preferences.core.edit
 import androidx.datastore.preferences.preferencesDataStore
-import com.charles.photobooth.monetization.AdsInitializer
 import com.charles.photobooth.template.BuiltInWeddingFrame
 import com.google.firebase.crashlytics.FirebaseCrashlytics
 import kotlinx.coroutines.CoroutineScope
@@ -35,9 +34,9 @@ class PhotoboothApp : Application() {
                 .build()
             com.google.firebase.FirebaseApp.initializeApp(this, options)
         }
-        if (!BuildConfig.WEDDING_MODE) {
-            AdsInitializer.initialize(this)
-        }
+        // CODY PRIVATE FORK: no ads. AdsInitializer.initialize(this) removed.
+        // Firebase Crashlytics below is left as-is (consent-gated); remove it too
+        // if you want zero network calls from this build.
         if (!BuildConfig.WEDDING_MODE) {
             val consent = runBlocking { getConsentStatus() }
             FirebaseCrashlytics.getInstance()

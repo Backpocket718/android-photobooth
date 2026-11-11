@@ -26,10 +26,8 @@ class MonetizationViewModel(
     val billingState: StateFlow<BillingUiState> = billingRepository.state
 
     init {
-        if (!BuildConfig.WEDDING_MODE) {
-            rewardedAdManager.loadAd()
-            billingRepository.startConnection()
-        }
+        // CODY PRIVATE FORK: no ads, no billing. Do not load rewarded ads or
+        // start a Play Billing connection. Quota is unlimited (see PhotoQuotaRepository).
     }
 
     suspend fun reservePhotos(photoCount: Int): Boolean = quotaRepository.reservePhotos(photoCount)

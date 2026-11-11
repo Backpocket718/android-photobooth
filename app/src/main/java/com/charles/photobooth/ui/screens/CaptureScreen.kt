@@ -160,6 +160,9 @@ fun CaptureScreen(
     var recordingSeconds by rememberSaveable { mutableIntStateOf(0) }
     var pendingVideoPath by rememberSaveable { mutableStateOf<String?>(null) }
     var boothPhotoCount by rememberSaveable { mutableIntStateOf(4) }
+    // CODY: seconds to wait between booth shots, set in Settings > Capture Mode.
+    // Upstream stored this setting but never used it (hardcoded 2s gap below).
+    var boothIntervalSeconds by rememberSaveable { mutableIntStateOf(5) }
     var selectedTemplateKey by rememberSaveable { mutableStateOf(BuiltInTemplates.KEY_NONE) }
     var disabledTemplateKeys by remember { mutableStateOf<Set<String>>(emptySet()) }
     var frontScreenFlashEnabled by rememberSaveable { mutableStateOf(false) }
@@ -217,6 +220,7 @@ fun CaptureScreen(
             videoModeSelected = false
         }
         boothPhotoCount = settings.captureMode.boothPhotoCount
+        boothIntervalSeconds = settings.captureMode.boothIntervalSeconds.coerceIn(1, 15)
         disabledTemplateKeys = settings.captureMode.disabledTemplateKeys
         val storedTemplate = settings.captureMode.selectedTemplate
         selectedTemplateKey = if (storedTemplate in settings.captureMode.disabledTemplateKeys) {
@@ -323,7 +327,9 @@ fun CaptureScreen(
 
     LaunchedEffect(pendingNextBoothShot) {
         if (pendingNextBoothShot) {
-            delay(2000)
+            // CODY: was hardcoded delay(2000). Now uses the admin-set gap so
+            // guests have time to reset / pose between shots.
+            delay(boothIntervalSeconds * 1000L)
             showFlash = false
             pendingNextBoothShot = false
             captureViewModel.startCountdown()

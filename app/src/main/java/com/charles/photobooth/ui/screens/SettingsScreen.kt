@@ -851,6 +851,43 @@ private fun CaptureModeSection(
                     ) { Text("+") }
                 }
             }
+            // CODY: time between booth shots. Upstream stored boothIntervalSeconds
+            // but never showed it in Settings and never used it (hardcoded 2s).
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically,
+            ) {
+                Text(
+                    text = "Time between photos",
+                    style = MaterialTheme.typography.bodyMedium,
+                    color = Color.White,
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    ElevatedButton(
+                        onClick = { onCaptureModeChange { copy(boothIntervalSeconds = maxOf(1, boothIntervalSeconds - 1)) } },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.elevatedButtonColors(
+                            containerColor = CardSurfaceLight,
+                            contentColor = Color.White,
+                        ),
+                    ) { Text("-") }
+                    Text(
+                        text = " ${state.captureMode.boothIntervalSeconds}s ",
+                        style = MaterialTheme.typography.bodyLarge,
+                        color = Color.White,
+                        fontWeight = FontWeight.Bold,
+                    )
+                    ElevatedButton(
+                        onClick = { onCaptureModeChange { copy(boothIntervalSeconds = minOf(15, boothIntervalSeconds + 1)) } },
+                        shape = RoundedCornerShape(8.dp),
+                        colors = ButtonDefaults.elevatedButtonColors(
+                            containerColor = CardSurfaceLight,
+                            contentColor = Color.White,
+                        ),
+                    ) { Text("+") }
+                }
+            }
         }
         Spacer(modifier = Modifier.height(4.dp))
         Text(

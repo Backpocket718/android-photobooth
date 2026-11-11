@@ -36,9 +36,19 @@ class CameraCaptureManager(
             val facing = characteristics.get(CameraCharacteristics.LENS_FACING)
                 ?: CameraCharacteristics.LENS_FACING_BACK
             val isFront = facing == CameraCharacteristics.LENS_FACING_FRONT
+            // CODY: Android exposes a plugged-in UVC webcam / HDMI-capture dongle
+            // as LENS_FACING_EXTERNAL when the tablet supports it. Label it so
+            // it is pickable in Settings instead of hiding as "Back Camera".
+            // If a webcam does NOT appear here, the tablet does not expose it
+            // via Camera2 and CameraX cannot use it (needs a UVC library instead).
+            val isExternal = facing == CameraCharacteristics.LENS_FACING_EXTERNAL
             CameraInfo(
                 id = id,
-                displayName = if (isFront) "Front Camera" else "Back Camera ($id)",
+                displayName = when {
+                    isExternal -> "External / USB Camera ($id)"
+                    isFront -> "Front Camera"
+                    else -> "Back Camera ($id)"
+                },
                 isFrontFacing = isFront,
             )
         }
